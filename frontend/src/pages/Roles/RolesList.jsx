@@ -1,33 +1,64 @@
 import React, { useState } from 'react';
 
-export default function RolesList({ roles, onDelete, onEdit, onAdd }) {
+export default function RolesList({ roles }) {
   const [search, setSearch] = useState('');
   const filtered = roles.filter(r => r.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div>
-      <h2>Manage Roles</h2>
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-          <input className="btn" style={{ background: '#fff', color: '#000' }} placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button className="btn" onClick={onAdd}>+ Add Role</button>
+    <div className="content-wrapper">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+        <div>
+          <h2>Access Roles Management</h2>
+          <p style={{ margin: 0 }}>Define system access levels and permissions for administrators, faculty supervisors, and students.</p>
         </div>
-        <table className="table">
-          <thead>
-            <tr><th>#</th><th>Role Name</th><th>Description</th><th>Actions</th></tr>
-          </thead>
-          <tbody>
-            {filtered.map((r, i) => (
-              <tr key={r.id}>
-                <td>{i + 1}</td><td><strong>{r.name}</strong></td><td>{r.description}</td>
-                <td>
-                  <button className="btn" onClick={() => onEdit(r)}>Edit</button>
-                  <button className="btn" style={{ background: '#dc2626' }} onClick={() => onDelete(r.id)}>Delete</button>
-                </td>
+      </div>
+
+      <div className="card">
+        <div className="search-container">
+          <div className="search-input-wrapper" style={{ maxWidth: '300px' }}>
+            <span className="search-icon">🔍</span>
+            <input 
+              className="input-control" 
+              placeholder="Search roles..." 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+            />
+          </div>
+        </div>
+
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: '80px' }}>#</th>
+                <th style={{ width: '250px' }}>Role Title</th>
+                <th>Access & Permissions Description</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.length > 0 ? (
+                filtered.map((r, i) => (
+                  <tr key={r.id}>
+                    <td>{i + 1}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px' }}>🛡️</span>
+                        <strong>{r.name}</strong>
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)' }}>{r.description}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    No roles found matching the search criteria.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
