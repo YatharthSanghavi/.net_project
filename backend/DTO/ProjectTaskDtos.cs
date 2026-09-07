@@ -1,18 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SPMS.Models
+namespace SPMS.DTOs
 {
-    public class ProjectTask
+    public class ProjectTaskDto
     {
-        [Key]
         public int TaskId { get; set; }
 
         [Required]
         public int ProjectId { get; set; }
-
-        [ForeignKey(nameof(ProjectId))]
-        public virtual Project Project { get; set; } = null!;
 
         [Required]
         [StringLength(200)]
@@ -23,22 +18,14 @@ namespace SPMS.Models
         [Required]
         public int TaskStatus { get; set; }
 
-        [ForeignKey(nameof(TaskStatus))]
-        public virtual Status Status { get; set; } = null!;
-
         [Required]
         public int PriorityID { get; set; }
 
-        [ForeignKey(nameof(PriorityID))]
-        public virtual Priority Priority { get; set; } = null!;
-
-        [Column(TypeName = "decimal(5,2)")]
+        [Required]
         public decimal AssignedScore { get; set; }
 
-        [Column(TypeName = "decimal(5,2)")]
         public decimal? EarnedScore { get; set; }
 
-        [Column(TypeName = "decimal(5,2)")]
         public decimal ProgressPercentage { get; set; }
 
         public DateTime? StartDate { get; set; }
@@ -52,7 +39,5 @@ namespace SPMS.Models
 
         [StringLength(500)]
         public string? StudentRemarks { get; set; }
-
-        public bool? IsDeleted { get; set; } = false;
     }
 }

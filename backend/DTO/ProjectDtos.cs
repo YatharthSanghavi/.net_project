@@ -1,11 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SPMS.Models
+namespace SPMS.DTOs
 {
-    public class Project
+    public class ProjectDto
     {
-        [Key]
         public int ProjectId { get; set; }
 
         [Required]
@@ -17,36 +15,24 @@ namespace SPMS.Models
         [Required]
         public int StudentId { get; set; }
 
-        [ForeignKey(nameof(StudentId))]
-        public virtual User Student { get; set; } = null!;
-
         [Required]
         public int FacultyId { get; set; }
 
-        [ForeignKey(nameof(FacultyId))]
-        public virtual User Faculty { get; set; } = null!;
-
-        public DateTime AssignedDate { get; set; } = DateTime.Now;
-
-        public bool? IsDeleted { get; set; } = false;
+        public DateTime AssignedDate { get; set; }
 
         [Required]
         public int ProjectStatus { get; set; }
 
-        [ForeignKey(nameof(ProjectStatus))]
-        public virtual Status Status { get; set; } = null!;
-
+        [Required]
         public DateTime StartDate { get; set; }
 
+        [Required]
         public DateTime EndDate { get; set; }
 
         public int TotalTasks { get; set; }
 
         public int CompletedTasks { get; set; }
 
-        [Column(TypeName = "decimal(5,2)")]
         public decimal ProgressPercentage { get; set; }
-
-        public virtual ICollection<ProjectTask> Tasks { get; set; } = new List<ProjectTask>();
     }
 }

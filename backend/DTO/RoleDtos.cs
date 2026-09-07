@@ -1,11 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SPMS.Models
+namespace SPMS.DTOs
 {
-    public class Role
+    public class RoleDto
     {
-        [Key]
         public int RoleId { get; set; }
 
         [Required]
@@ -14,7 +12,5 @@ namespace SPMS.Models
 
         [StringLength(250)]
         public string? Description { get; set; }
-
-        public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     }
 }
