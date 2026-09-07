@@ -15,7 +15,6 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [screen, setScreen] = useState('dashboard');
-  const [roles] = useState(initialRoles);
   const [users] = useState(initialUsers);
   const [projects] = useState(initialProjects);
   const [tasks] = useState(initialTasks);
@@ -28,8 +27,8 @@ export default function App() {
       <Navbar activeScreen={screen} onNavigate={setScreen} />
       <main style={{ flex: 1, padding: '20px' }}>
         {screen === 'dashboard' && <Dashboard users={users} projects={projects} tasks={tasks} onNavigate={setScreen} />}
-        {screen === 'roles' && <RolesList roles={roles} />}
-        {(screen === 'users' || screen === 'students' || screen === 'faculty') && <UsersList users={users} roles={roles} />}
+        {screen === 'roles' && <RolesList />}
+        {(screen === 'users' || screen === 'students' || screen === 'faculty') && <UsersList users={users} roles={initialRoles} />}
         {screen === 'projects' && <ProjectsList projects={projects} />}
         {screen === 'tasks' && <TasksList tasks={tasks} />}
         {screen === 'scores' && <ScoresRemarks tasks={tasks} />}
