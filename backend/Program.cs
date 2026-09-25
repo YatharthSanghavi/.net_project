@@ -13,6 +13,13 @@ namespace SPMS
             // Add services to the container.
 
             builder.Services.AddControllers();
+
+	    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+            builder.Services.AddScoped<IValidator<ProjectTaskDto>, ProjectTaskValidator>();
+            builder.Services.AddScoped<IValidator<ProjectDto>, ProjectValidator>();
+            builder.Services.AddScoped<IValidator<UserDto>, UserValidator>();
+            builder.Services.AddScoped<IValidator<RoleDto>, RoleValidator>();
+
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
             builder.Services.AddDbContext<AppDbContext>(options =>
