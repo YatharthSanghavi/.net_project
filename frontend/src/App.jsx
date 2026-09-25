@@ -19,18 +19,42 @@ export default function App() {
   const [projects] = useState(initialProjects);
   const [tasks] = useState(initialTasks);
 
-  if (!isLoggedIn) return <Login onLogin={(u) => { setUser(u); setIsLoggedIn(true); setScreen('dashboard'); }} />;
+  const handleLogin = (loggedInUser) => {
+    setUser(loggedInUser);
+    setIsLoggedIn(true);
+    setScreen('dashboard');
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUser(null);
+    setScreen('dashboard');
+  };
+
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Header user={user} onLogout={() => setIsLoggedIn(false)} onNavigate={setScreen} />
-      <Navbar activeScreen={screen} onNavigate={setScreen} />
+      <Header user={user} onLogout={handleLogout} onNavigate={setScreen} />
+      <Navbar activeScreen={screen} onNavigate={setScreen} userRole={user?.role} />
       <main style={{ flex: 1, padding: '20px' }}>
-        {screen === 'dashboard' && <Dashboard users={users} projects={projects} tasks={tasks} onNavigate={setScreen} />}
+        {screen === 'dashboard' && (
+          <Dashboard 
+            user={user}
+            users={users} 
+            projects={projects} 
+            tasks={tasks} 
+            onNavigate={setScreen} 
+          />
+        )}
         {screen === 'roles' && <RolesList />}
-        {(screen === 'users' || screen === 'students' || screen === 'faculty') && <UsersList users={users} roles={initialRoles} />}
-        {screen === 'projects' && <ProjectsList projects={projects} />}
-        {screen === 'tasks' && <TasksList tasks={tasks} />}
+        {(screen === 'users' || screen === 'students' || screen === 'faculty') && (
+          <UsersList users={users} roles={initialRoles} userRole={user?.role} />
+        )}
+        {screen === 'projects' && <ProjectsList projects={projects} userRole={user?.role} />}
+        {screen === 'tasks' && <TasksList tasks={tasks} userRole={user?.role} />}
         {screen === 'scores' && <ScoresRemarks tasks={tasks} />}
       </main>
       <Footer />
