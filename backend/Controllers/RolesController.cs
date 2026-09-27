@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SPMS.Data;
 using SPMS.DTOs;
@@ -8,6 +9,7 @@ namespace SPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class RolesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -58,6 +60,7 @@ namespace SPMS.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateRole(RoleDto dto)
         {
             var role = new Role();
@@ -71,6 +74,7 @@ namespace SPMS.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateRole(int id, RoleDto dto)
         {
             var role = await _context.Roles.FindAsync(id);
@@ -90,6 +94,7 @@ namespace SPMS.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteRole(int id)
         {
             var role = await _context.Roles.FindAsync(id);

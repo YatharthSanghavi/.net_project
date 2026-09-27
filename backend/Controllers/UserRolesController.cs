@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SPMS.Data;
 using SPMS.DTOs;
@@ -8,6 +9,7 @@ namespace SPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")]
     public class UserRolesController : ControllerBase
     {
         private readonly AppDbContext _context;

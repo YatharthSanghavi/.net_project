@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SPMS.Data;
 using SPMS.DTOs;
@@ -8,6 +9,7 @@ namespace SPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PriorityController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -30,8 +32,8 @@ namespace SPMS.Controllers
             {
                 var priorityDto = new PriorityDto();
                 priorityDto.PriorityID = p.PriorityID;
-                priorityDto.PriorityName = p.PriorityName;
-                priorityDto.PriortyCssClass = p.PriortyCssClass;
+                priorityDto.PriorityName = p.PriorityName ?? string.Empty;
+                priorityDto.PriortyCssClass = p.PriortyCssClass ?? string.Empty;
 
                 priorityDtoList.Add(priorityDto);
             }
@@ -51,13 +53,14 @@ namespace SPMS.Controllers
 
             var priorityDto = new PriorityDto();
             priorityDto.PriorityID = priority.PriorityID;
-            priorityDto.PriorityName = priority.PriorityName;
-            priorityDto.PriortyCssClass = priority.PriortyCssClass;
+            priorityDto.PriorityName = priority.PriorityName ?? string.Empty;
+            priorityDto.PriortyCssClass = priority.PriortyCssClass ?? string.Empty;
 
             return Ok(priorityDto);
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreatePriority(PriorityDto dto)
         {
             var priority = new Priority();
@@ -71,6 +74,7 @@ namespace SPMS.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdatePriority(int id, PriorityDto dto)
         {
             var priority = await _context.Priorities.FindAsync(id);
@@ -90,6 +94,7 @@ namespace SPMS.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeletePriority(int id)
         {
             var priority = await _context.Priorities.FindAsync(id);

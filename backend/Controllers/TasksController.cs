@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SPMS.Data;
 using SPMS.DTOs;
@@ -8,6 +9,7 @@ namespace SPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class TasksController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -82,6 +84,7 @@ namespace SPMS.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Faculty")]
         public async Task<IActionResult> CreateTask(ProjectTaskDto dto)
         {
             var task = new ProjectTask();
@@ -119,6 +122,7 @@ namespace SPMS.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Faculty,Student")]
         public async Task<IActionResult> UpdateTask(int id, ProjectTaskDto dto)
         {
             var task = await _context.Tasks.FindAsync(id);
@@ -161,6 +165,7 @@ namespace SPMS.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,Faculty")]
         public async Task<IActionResult> DeleteTask(int id)
         {
             var task = await _context.Tasks.FindAsync(id);

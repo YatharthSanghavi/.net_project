@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SPMS.Data;
 using SPMS.DTOs;
@@ -8,6 +9,7 @@ namespace SPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class StatusController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -58,6 +60,7 @@ namespace SPMS.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateStatus(StatusDto dto)
         {
             var status = new Status();
@@ -71,6 +74,7 @@ namespace SPMS.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateStatus(int id, StatusDto dto)
         {
             var status = await _context.Statuses.FindAsync(id);
@@ -90,6 +94,7 @@ namespace SPMS.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteStatus(int id)
         {
             var status = await _context.Statuses.FindAsync(id);
