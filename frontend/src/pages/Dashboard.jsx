@@ -1,482 +1,365 @@
 import React, { useState, useEffect } from 'react';
+import apiService from '../services/apiService';
 
-export default function Dashboard({ user, users, projects, tasks, onNavigate }) {
-  const [dashboardData, setDashboardData] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+export default function Dashboard({ user, onNavigate }) {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [statuses, setStatuses] = useState([]);
 
   useEffect(() => {
-    // Simulate API call to fetch dashboard data
-    setTimeout(() => {
-      const processedData = processDataByRole(user?.role || 'Admin');
-      setDashboardData(processedData);
-      setLoading(false);
-    }, 600);
+    loadDashboardData();
   }, [user]);
 
-  const processDataByRole = (role) => {
-    let filteredProjects = projects || [];
-    let filteredTasks = tasks || [];
-    let dashboardMetrics = {};
+  const loadDashboardData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [projData, tasksData, usersData, statusData, prioData] = await Promise.all([
+        apiService.projects.getAll().catch(() => []),
+        apiService.tasks.getAll().catch(() => []),
+        apiService.users.getAll().catch(() => []),
+        apiService.status.getAll().catch(() => []),
+        apiService.priority.getAll().catch(() => []),
+      ]);
 
-    if (role === 'Faculty') {
-      // Show only assigned faculty projects
-      filteredProjects = projects?.filter(p => p.facultyName === user?.name) || [];
-      filteredTasks = tasks?.filter(t => t.assignedTo === user?.name) || [];
-    } else if (role === 'Student') {
-      // Show only student's projects
-      filteredProjects = projects?.filter(p => p.assignedStudents?.includes(user?.name)) || [];
-      filteredTasks = tasks?.filter(t => t.assignedTo === user?.name) || [];
-    }
-
-    // Calculate metrics
-    const completedProjects = filteredProjects.filter(p => p.status === 'Completed').length;
-    const inProgressProjects = filteredProjects.filter(p => p.status === 'In Progress').length;
-    const notStartedProjects = filteredProjects.filter(p => p.status === 'Not Started').length;
-
-    const completedTasks = filteredTasks.filter(t => t.status === 'Completed').length;
-    const pendingTasks = filteredTasks.filter(t => t.status === 'Pending').length;
-    const activeTasks = filteredTasks.filter(t => t.status === 'In Progress').length;
-    const rejectedTasks = filteredTasks.filter(t => t.status === 'Rejected').length;
-
-    const totalAssignedScore = filteredTasks.reduce((sum, t) => sum + (t.assignedScore || 0), 0);
-    const totalEarnedScore = filteredTasks.reduce((sum, t) => sum + (t.earnedScore || 0), 0);
-    const performancePercentage = totalAssignedScore > 0 ? Math.round((totalEarnedScore / totalAssignedScore) * 100) : 0;
-
-    dashboardMetrics = {
-      totalProjects: filteredProjects.length,
-      completedProjects,
-      inProgressProjects,
-      notStartedProjects,
-      projectProgressPercent: filteredProjects.length ? Math.round((completedProjects / filteredProjects.length) * 100) : 0,
-      totalTasks: filteredTasks.length,
-      completedTasks,
-      pendingTasks,
-      activeTasks,
-      rejectedTasks,
-      taskProgressPercent: filteredTasks.length ? Math.round((completedTasks / filteredTasks.length) * 100) : 0,
-      totalUsers: users?.length || 0,
-      studentCount: users?.filter(u => u.role === 'Student').length || 0,
-      facultyCount: users?.filter(u => u.role === 'Faculty').length || 0,
-      totalAssignedScore,
-      totalEarnedScore,
-      performancePercentage
-    };
-
-    return {
-      metrics: dashboardMetrics,
-      projects: filteredProjects,
-      tasks: filteredTasks,
-      role
-    };
-  };
-
-  const getStatusBadgeClass = (status) => {
-    switch (status) {
-      case 'Completed': return 'badge badge-success';
-      case 'In Progress': return 'badge badge-warning';
-      case 'Not Started': return 'badge badge-info';
-      case 'Pending': return 'badge badge-secondary';
-      case 'Rejected': return 'badge badge-danger';
-      default: return 'badge badge-muted';
+      setProjects(Array.isArray(projData) ? projData : []);
+      setTasks(Array.isArray(tasksData) ? tasksData : []);
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      setStatuses(Array.isArray(statusData) ? statusData : []);
+      setPriorities(Array.isArray(prioData) ? prioData : []);
+    } catch (err) {
+      setError(err.message || 'Failed to load dashboard data.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getPriorityBadgeClass = (priority) => {
-    switch (priority) {
-      case 'High': return 'badge badge-danger';
-      case 'Medium': return 'badge badge-warning';
-      case 'Low': return 'badge badge-info';
-      default: return 'badge badge-secondary';
-    }
+  const role = user?.role || 'Admin';
+  const userId = user?.userId;
+
+  // Filter based on role
+  let roleProjects = projects;
+  let roleTasks = tasks;
+
+  if (role === 'Student' && userId) {
+    roleProjects = projects.filter((p) => p.studentId === userId);
+    const userProjIds = roleProjects.map((p) => p.projectId);
+    roleTasks = tasks.filter((t) => userProjIds.includes(t.projectId));
+  } else if (role === 'Faculty' && userId) {
+    roleProjects = projects.filter((p) => p.facultyId === userId);
+    const userProjIds = roleProjects.map((p) => p.projectId);
+    roleTasks = tasks.filter((t) => userProjIds.includes(t.projectId));
+  }
+
+  // Calculate metrics
+  const totalProjects = roleProjects.length;
+  const completedProjects = roleProjects.filter(
+    (p) => p.completedTasks > 0 && p.completedTasks === p.totalTasks
+  ).length;
+
+  const totalTasks = roleTasks.length;
+  const completedTasks = roleTasks.filter((t) => t.completedDate || t.progressPercentage === 100).length;
+  const inProgressTasks = roleTasks.filter(
+    (t) => !t.completedDate && t.progressPercentage > 0 && t.progressPercentage < 100
+  ).length;
+  const pendingTasks = roleTasks.filter(
+    (t) => !t.completedDate && (t.progressPercentage === 0 || !t.progressPercentage)
+  ).length;
+
+  const totalAssignedScore = roleTasks.reduce((sum, t) => sum + (Number(t.assignedScore) || 0), 0);
+  const totalEarnedScore = roleTasks.reduce((sum, t) => sum + (Number(t.earnedScore) || 0), 0);
+  const performanceRate =
+    totalAssignedScore > 0 ? Math.round((totalEarnedScore / totalAssignedScore) * 100) : 0;
+  const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const getUserName = (id) => {
+    const u = users.find((x) => x.userId === id);
+    return u ? u.fullName : `User #${id}`;
+  };
+
+  const getStatusName = (statusId) => {
+    const s = statuses.find((x) => x.statusID === statusId);
+    return s ? s.statusName : `Status #${statusId}`;
   };
 
   if (loading) {
     return (
       <div className="content-wrapper" style={{ textAlign: 'center', padding: '60px 20px' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-        <h3>Loading Dashboard...</h3>
-        <p style={{ color: 'var(--text-muted)' }}>Preparing your personalized view</p>
+        <h3>Loading SPMS Dashboard...</h3>
+        <p style={{ color: 'var(--text-muted)' }}>Retrieving analytics from ASP.NET Core backend...</p>
       </div>
     );
   }
-
-  if (!dashboardData) {
-    return (
-      <div className="content-wrapper">
-        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <h3>No data available</h3>
-        </div>
-      </div>
-    );
-  }
-
-  const { metrics, projects: visibleProjects, tasks: visibleTasks, role } = dashboardData;
 
   return (
     <div className="content-wrapper">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      {/* Welcome banner */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+          color: '#fff',
+          borderRadius: 'var(--radius-lg)',
+          padding: '28px',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px',
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
         <div>
-          <h2>
-            {role === 'Admin' && '📊 System Dashboard'}
-            {role === 'Faculty' && '👨‍🏫 Faculty Dashboard'}
-            {role === 'Student' && '🎓 Student Dashboard'}
+          <div style={{ display: 'inline-block', padding: '4px 12px', background: 'rgba(13, 148, 136, 0.3)', color: '#2dd4bf', borderRadius: '20px', fontSize: '12px', fontWeight: '700', marginBottom: '10px' }}>
+            {role.toUpperCase()} PORTAL
+          </div>
+          <h2 style={{ color: '#fff', margin: '0 0 6px 0', fontSize: '26px' }}>
+            Welcome back, {user?.name || 'Academic User'}!
           </h2>
-          <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-            {role === 'Admin' && 'Overview of all student project submissions, tasks allocation, and evaluation stats.'}
-            {role === 'Faculty' && 'Your assigned projects and student task evaluations.'}
-            {role === 'Student' && 'Your projects, tasks, and performance summary.'}
+          <p style={{ color: '#94a3b8', margin: 0, fontSize: '14px' }}>
+            {role === 'Admin' && 'System-wide academic project supervision, user management, and deliverables overview.'}
+            {role === 'Faculty' && 'Supervise guided student projects, review pending tasks, and submit evaluation feedback.'}
+            {role === 'Student' && 'Track allocated project milestones, submit deliverables, and review faculty feedback.'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-sm btn-outline" onClick={() => onNavigate('projects')}>
-            📂 View Projects
+
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          {(role === 'Admin' || role === 'Faculty') && (
+            <button className="btn" onClick={() => onNavigate('projects')} style={{ background: '#0d9488' }}>
+              📁 Projects
+            </button>
+          )}
+          <button className="btn btn-outline" onClick={() => onNavigate('tasks')} style={{ color: '#fff', borderColor: '#475569' }}>
+            📝 Tasks
           </button>
-          <button className="btn btn-sm btn-outline" onClick={() => onNavigate('tasks')}>
-            📝 View Tasks
+          <button className="btn btn-outline" onClick={() => onNavigate('scores')} style={{ color: '#fff', borderColor: '#475569' }}>
+            💡 Scores
           </button>
         </div>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="metrics-grid">
-        <div className="metric-card" onClick={() => onNavigate('users')}>
-          <div className="metric-info">
-            <h3>{metrics.totalUsers}</h3>
-            <div>Total Users</div>
-            {role === 'Admin' && (
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                👥 {metrics.studentCount} Students • {metrics.facultyCount} Faculty
+      {error && (
+        <div className="alert alert-error" style={{ marginBottom: '20px' }}>
+          <span>⚠️</span>
+          <div style={{ flex: 1 }}>{error}</div>
+          <button className="btn btn-sm btn-outline" onClick={loadDashboardData} style={{ marginLeft: '12px' }}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* KPI Metrics Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px', marginBottom: '28px' }}>
+        <div className="card" style={{ margin: 0, padding: '22px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em' }}>
+                TOTAL PROJECTS
               </span>
-            )}
-          </div>
-          <div className="metric-icon">👥</div>
-        </div>
-
-        <div className="metric-card" onClick={() => onNavigate('projects')}>
-          <div className="metric-info">
-            <h3>{metrics.totalProjects}</h3>
-            <div>
-              {role === 'Admin' ? 'Total Projects' : role === 'Faculty' ? 'Assigned Projects' : 'My Projects'}
-            </div>
-            <div className="progress-bar-container" style={{ width: '120px', marginTop: '4px' }}>
-              <div className="progress-bar" style={{ width: `${metrics.projectProgressPercent}%` }}></div>
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              {metrics.projectProgressPercent}% Completed
-            </span>
-          </div>
-          <div className="metric-icon" style={{ color: '#10b981', background: 'var(--success-light)' }}>📁</div>
-        </div>
-
-        <div className="metric-card" onClick={() => onNavigate('tasks')}>
-          <div className="metric-info">
-            <h3>{metrics.totalTasks}</h3>
-            <div>
-              {role === 'Admin' ? 'Allocated Tasks' : role === 'Faculty' ? 'Task Evaluations' : 'My Tasks'}
-            </div>
-            <div className="progress-bar-container" style={{ width: '120px', marginTop: '4px' }}>
-              <div className="progress-bar" style={{ width: `${metrics.taskProgressPercent}%`, background: '#3b82f6' }}></div>
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              {metrics.completedTasks} Done • {metrics.pendingTasks} Pending
-            </span>
-          </div>
-          <div className="metric-icon" style={{ color: '#3b82f6', background: 'var(--info-light)' }}>📝</div>
-        </div>
-
-        {(role === 'Student' || role === 'Faculty') && (
-          <div className="metric-card">
-            <div className="metric-info">
-              <h3>{metrics.performancePercentage}%</h3>
-              <div>Performance Score</div>
-              <div className="progress-bar-container" style={{ width: '120px', marginTop: '4px' }}>
-                <div className="progress-bar" style={{
-                  width: `${metrics.performancePercentage}%`,
-                  background: metrics.performancePercentage >= 75 ? '#10b981' : metrics.performancePercentage >= 50 ? '#f59e0b' : '#ef4444'
-                }}></div>
+              <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-main)', marginTop: '4px' }}>
+                {totalProjects}
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                {metrics.totalEarnedScore} / {metrics.totalAssignedScore} points
+            </div>
+            <span style={{ fontSize: '28px', background: 'rgba(13, 148, 136, 0.1)', padding: '10px', borderRadius: '12px' }}>
+              📁
+            </span>
+          </div>
+          <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
+            {completedProjects} of {totalProjects} completed
+          </div>
+        </div>
+
+        <div className="card" style={{ margin: 0, padding: '22px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em' }}>
+                TASK DELIVERABLES
+              </span>
+              <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-main)', marginTop: '4px' }}>
+                {totalTasks}
+              </div>
+            </div>
+            <span style={{ fontSize: '28px', background: 'rgba(6, 182, 212, 0.1)', padding: '10px', borderRadius: '12px' }}>
+              📝
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
+            <span className="badge badge-success">{completedTasks} Done</span>
+            <span className="badge badge-warning">{inProgressTasks + pendingTasks} Active</span>
+          </div>
+        </div>
+
+        <div className="card" style={{ margin: 0, padding: '22px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em' }}>
+                ACADEMIC PERFORMANCE
+              </span>
+              <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>
+                {performanceRate}%
+              </div>
+            </div>
+            <span style={{ fontSize: '28px', background: 'rgba(16, 185, 129, 0.1)', padding: '10px', borderRadius: '12px' }}>
+              🎯
+            </span>
+          </div>
+          <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
+            {totalEarnedScore} / {totalAssignedScore} points earned
+          </div>
+        </div>
+
+        {role === 'Admin' ? (
+          <div className="card" style={{ margin: 0, padding: '22px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em' }}>
+                  ACTIVE USERS
+                </span>
+                <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--info)', marginTop: '4px' }}>
+                  {users.length}
+                </div>
+              </div>
+              <span style={{ fontSize: '28px', background: 'rgba(59, 130, 246, 0.1)', padding: '10px', borderRadius: '12px' }}>
+                👥
               </span>
             </div>
-            <div className="metric-icon" style={{ color: '#f59e0b', background: 'var(--warning-light)' }}>⭐</div>
+            <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              Registered students & faculty accounts
+            </div>
+          </div>
+        ) : (
+          <div className="card" style={{ margin: 0, padding: '22px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em' }}>
+                  TASK COMPLETION RATE
+                </span>
+                <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>
+                  {taskCompletionRate}%
+                </div>
+              </div>
+              <span style={{ fontSize: '28px', background: 'rgba(13, 148, 136, 0.1)', padding: '10px', borderRadius: '12px' }}>
+                📊
+              </span>
+            </div>
+            <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              Milestone delivery pace
+            </div>
           </div>
         )}
       </div>
 
-      {/* Tabs Navigation */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
-        <button
-          className={`btn btn-sm ${activeTab === 'overview' ? '' : 'btn-outline'}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          📊 Overview
-        </button>
-        <button
-          className={`btn btn-sm ${activeTab === 'projects' ? '' : 'btn-outline'}`}
-          onClick={() => setActiveTab('projects')}
-        >
-          📁 Projects ({visibleProjects.length})
-        </button>
-        <button
-          className={`btn btn-sm ${activeTab === 'tasks' ? '' : 'btn-outline'}`}
-          onClick={() => setActiveTab('tasks')}
-        >
-          📝 Tasks ({visibleTasks.length})
-        </button>
-        <button
-          className={`btn btn-sm ${activeTab === 'stats' ? '' : 'btn-outline'}`}
-          onClick={() => setActiveTab('stats')}
-        >
-          📈 Statistics
-        </button>
+      {/* Two Columns: Recent Projects & Priority Tasks */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' }}>
+        {/* Recent Projects Card */}
+        <div className="card" style={{ margin: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0 }}>📁 Active Academic Projects</h3>
+            <button className="btn btn-sm btn-outline" onClick={() => onNavigate('projects')}>
+              View All
+            </button>
+          </div>
+
+          {roleProjects.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {roleProjects.slice(0, 5).map((p) => {
+                const projTasks = tasks.filter((t) => t.projectId === p.projectId);
+                const doneTasks = projTasks.filter((t) => t.completedDate || t.progressPercentage === 100).length;
+                const pct = projTasks.length > 0 ? Math.round((doneTasks / projTasks.length) * 100) : 0;
+
+                return (
+                  <div
+                    key={p.projectId}
+                    style={{
+                      padding: '12px 14px',
+                      background: 'var(--bg-base)',
+                      borderRadius: 'var(--radius-md)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.projectTitle}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        🎓 {getUserName(p.studentId)} • 👩‍🏫 {getUserName(p.facultyId)}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right', minWidth: '80px' }}>
+                      <span className="badge badge-info">{getStatusName(p.projectStatus)}</span>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        {pct}% done ({doneTasks}/{projTasks.length})
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px 0' }}>
+              No academic projects found.
+            </p>
+          )}
+        </div>
+
+        {/* Priority Tasks Card */}
+        <div className="card" style={{ margin: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0 }}>📝 Upcoming Task Deliverables</h3>
+            <button className="btn btn-sm btn-outline" onClick={() => onNavigate('tasks')}>
+              View All
+            </button>
+          </div>
+
+          {roleTasks.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {roleTasks.slice(0, 5).map((t) => (
+                <div
+                  key={t.taskId}
+                  style={{
+                    padding: '12px 14px',
+                    background: 'var(--bg-base)',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: '700', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {t.taskTitle}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      📅 Due: {t.dueDate ? t.dueDate.split('T')[0] : 'N/A'} • {t.assignedScore} Pts
+                    </div>
+                  </div>
+
+                  <div>
+                    {t.completedDate || t.progressPercentage === 100 ? (
+                      <span className="badge badge-success">Completed</span>
+                    ) : (
+                      <span className="badge badge-warning">Pending</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px 0' }}>
+              No tasks allocated yet.
+            </p>
+          )}
+        </div>
       </div>
-
-      {/* Tab Content */}
-      {activeTab === 'overview' && (
-        <div className="panels-grid">
-          {/* Project Status Summary */}
-          <div className="card">
-            <div className="card-title">
-              <span>📁 Project Status Summary</span>
-              <button className="btn btn-sm btn-outline" onClick={() => onNavigate('projects')}>
-                View All
-              </button>
-            </div>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Project Title</th>
-                    <th>{role === 'Admin' ? 'Faculty' : 'Assigned To'}</th>
-                    <th>Status</th>
-                    <th>Progress</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleProjects.slice(0, 5).map((p) => (
-                    <tr key={p.id}>
-                      <td style={{ fontWeight: '600' }}>{p.title}</td>
-                      <td>{p.facultyName || 'N/A'}</td>
-                      <td>
-                        <span className={getStatusBadgeClass(p.status)}>{p.status}</span>
-                      </td>
-                      <td>
-                        <div className="progress-bar-container" style={{ width: '80px' }}>
-                          <div className="progress-bar" style={{ width: `${p.progressPercentage || 0}%` }}></div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {visibleProjects.length === 0 && (
-                    <tr>
-                      <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
-                        No projects assigned yet
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Task Summary */}
-          <div className="card">
-            <div className="card-title">
-              <span>📝 Recent Tasks & Remarks</span>
-              <button className="btn btn-sm btn-outline" onClick={() => onNavigate('tasks')}>
-                View All
-              </button>
-            </div>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Task Name</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleTasks.slice(0, 5).map((t) => (
-                    <tr key={t.id}>
-                      <td style={{ fontWeight: '600' }}>{t.title}</td>
-                      <td>
-                        <span className={getPriorityBadgeClass(t.priority)}>{t.priority}</span>
-                      </td>
-                      <td>
-                        <span className={getStatusBadgeClass(t.status)}>{t.status}</span>
-                      </td>
-                      <td>
-                        <span style={{ fontWeight: '700' }}>
-                          {t.earnedScore || 0} / {t.assignedScore}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {visibleTasks.length === 0 && (
-                    <tr>
-                      <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
-                        No tasks assigned yet
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'projects' && (
-        <div className="card">
-          <div className="card-title">
-            <span>📁 All Projects</span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-              Completed: {metrics.completedProjects} | In Progress: {metrics.inProgressProjects} | Not Started: {metrics.notStartedProjects}
-            </span>
-          </div>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Project Title</th>
-                  <th>Faculty</th>
-                  <th>Start Date</th>
-                  <th>End Date</th>
-                  <th>Status</th>
-                  <th>Progress</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleProjects.map((p) => (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: '600' }}>{p.title}</td>
-                    <td>{p.facultyName}</td>
-                    <td>{new Date(p.startDate).toLocaleDateString()}</td>
-                    <td>{new Date(p.endDate).toLocaleDateString()}</td>
-                    <td>
-                      <span className={getStatusBadgeClass(p.status)}>{p.status}</span>
-                    </td>
-                    <td>
-                      <div className="progress-bar-container" style={{ width: '100px' }}>
-                        <div className="progress-bar" style={{ width: `${p.progressPercentage || 0}%` }}></div>
-                      </div>
-                      <span style={{ fontSize: '11px' }}>{p.progressPercentage || 0}%</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'tasks' && (
-        <div className="card">
-          <div className="card-title">
-            <span>📝 All Tasks</span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-              Completed: {metrics.completedTasks} | Pending: {metrics.pendingTasks} | In Progress: {metrics.activeTasks}
-            </span>
-          </div>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Task Title</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Due Date</th>
-                  <th>Score</th>
-                  <th>Progress</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleTasks.map((t) => (
-                  <tr key={t.id}>
-                    <td style={{ fontWeight: '600' }}>{t.title}</td>
-                    <td>
-                      <span className={getPriorityBadgeClass(t.priority)}>{t.priority}</span>
-                    </td>
-                    <td>
-                      <span className={getStatusBadgeClass(t.status)}>{t.status}</span>
-                    </td>
-                    <td>{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</td>
-                    <td>
-                      <span style={{ fontWeight: '700' }}>
-                        {t.earnedScore || 0} / {t.assignedScore}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="progress-bar-container" style={{ width: '100px' }}>
-                        <div className="progress-bar" style={{
-                          width: `${t.assignedScore > 0 ? (t.earnedScore || 0) / t.assignedScore * 100 : 0}%`
-                        }}></div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'stats' && (
-        <div className="panels-grid">
-          <div className="card">
-            <div className="card-title">📊 Project Statistics</div>
-            <div style={{ padding: '20px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>Completed</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>{metrics.completedProjects}</div>
-                </div>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>In Progress</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>{metrics.inProgressProjects}</div>
-                </div>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>Not Started</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>{metrics.notStartedProjects}</div>
-                </div>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>Total</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700' }}>{metrics.totalProjects}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-title">📝 Task Statistics</div>
-            <div style={{ padding: '20px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>Completed</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>{metrics.completedTasks}</div>
-                </div>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>In Progress</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>{metrics.activeTasks}</div>
-                </div>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>Pending</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>{metrics.pendingTasks}</div>
-                </div>
-                <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '4px' }}>Rejected</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#ef4444' }}>{metrics.rejectedTasks}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

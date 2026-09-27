@@ -18,7 +18,7 @@ export const FormValidator = {
 
   // Mobile number validation (10-15 digits)
   isValidMobileNumber: (mobile) => {
-    const regex = /^[0-9\-\+\(\) ]{10,15}$/;
+    const regex = /^[0-9+\-() ]{10,15}$/;
     return regex.test(mobile);
   },
 

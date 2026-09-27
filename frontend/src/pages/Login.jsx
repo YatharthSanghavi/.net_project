@@ -1,17 +1,26 @@
 import React, { useState } from 'react';
+import apiService from '../services/apiService';
 
 export default function Login({ onLogin }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     email: 'admin@spms.com',
-    password: 'admin123',
+    password: 'Admin@123',
     confirmPassword: '',
-    mobileNumber: '',
-    role: 'Student'
+    mobileNumber: '9876543210',
+    role: 'Admin',
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [apiSuccess, setApiSuccess] = useState('');
+
+  // Clear stale token on login screen mount
+  React.useEffect(() => {
+    apiService.setToken(null);
+    localStorage.removeItem('spms_user');
+  }, []);
 
   // Validation rules
   const validateEmail = (email) => {
@@ -26,7 +35,7 @@ export default function Login({ onLogin }) {
   };
 
   const validateMobileNumber = (mobile) => {
-    const regex = /^[0-9\-\+\(\) ]{10,15}$/;
+    const regex = /^[0-9+\-() ]{10,15}$/;
     return regex.test(mobile);
   };
 
@@ -42,7 +51,7 @@ export default function Login({ onLogin }) {
       if (!formData.fullName.trim()) {
         newErrors.fullName = 'Full name is required';
       } else if (!validateFullName(formData.fullName)) {
-        newErrors.fullName = 'Full name must be 2-150 characters and contain only letters and spaces';
+        newErrors.fullName = 'Full name must be 2-150 characters (letters and spaces only)';
       }
 
       if (!formData.mobileNumber.trim()) {
@@ -61,7 +70,7 @@ export default function Login({ onLogin }) {
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (isSignUp && !validatePassword(formData.password)) {
-      newErrors.password = 'Password must contain uppercase, lowercase, digit, and special character (@$!%*?&)';
+      newErrors.password = 'Password must be 8+ chars with uppercase, lowercase, digit, and special char (@$!%*?&)';
     }
 
     if (isSignUp) {
@@ -78,11 +87,11 @@ export default function Login({ onLogin }) {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error for this field when user starts typing
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+      setErrors((prev) => ({ ...prev, [name]: '' }));
     }
+    setApiError('');
   };
 
   const handleSubmit = async (e) => {
@@ -90,57 +99,147 @@ export default function Login({ onLogin }) {
     if (!validateForm()) return;
 
     setLoading(true);
+    setApiError('');
+    setApiSuccess('');
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      if (isSignUp) {
+        // Register API call
+        const registerData = {
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+          mobileNumber: formData.mobileNumber.trim(),
+          roleName: formData.role || 'Student',
+          profilePicturePath: '/images/default-avatar.png',
+        };
 
-      let displayName = formData.fullName || 'New User';
-      let role = formData.role;
-
-      if (!isSignUp) {
-        // Demo login logic
-        if (formData.email.includes('faculty')) {
-          role = 'Faculty';
-          displayName = 'Priya Sharma';
-        } else if (formData.email.includes('student')) {
-          role = 'Student';
-          displayName = 'Rohan Mehta';
+        const res = await apiService.auth.register(registerData);
+        if (res.token) {
+          apiService.setToken(res.token);
+          setApiSuccess('Registration successful! Logging you in...');
+          setTimeout(() => {
+            onLogin({
+              userId: res.user?.userId,
+              name: res.user?.fullName || formData.fullName,
+              email: res.user?.email || formData.email,
+              role: res.user?.role || formData.role || 'Student',
+              roles: res.user?.roles || [formData.role || 'Student'],
+              mobileNumber: res.user?.mobileNumber || formData.mobileNumber,
+              profilePicturePath: res.user?.profilePicturePath || '/images/default-avatar.png',
+            });
+          }, 800);
         } else {
-          role = 'Admin';
-          displayName = 'Aarav Patel';
+          setApiSuccess('Registration complete! Please sign in.');
+          setIsSignUp(false);
         }
-      }
+      } else {
+        // Login API call
+        const res = await apiService.auth.login({
+          email: formData.email.trim(),
+          password: formData.password,
+        });
 
-      onLogin({
-        email: formData.email,
-        role,
-        name: displayName,
-        mobileNumber: formData.mobileNumber
-      });
+        const token = res.token || res.Token;
+        if (token) {
+          apiService.setToken(token);
+        }
+
+        const loggedInUser = {
+          userId: res.user?.userId || 1,
+          name: res.user?.fullName || formData.email.split('@')[0],
+          email: res.user?.email || formData.email,
+          role: res.user?.role || res.user?.roles?.[0] || 'Student',
+          roles: res.user?.roles || [res.user?.role || 'Student'],
+          mobileNumber: res.user?.mobileNumber || '',
+          profilePicturePath: res.user?.profilePicturePath || '/images/default-avatar.png',
+        };
+
+        onLogin(loggedInUser);
+      }
+    } catch (err) {
+      console.warn('API Authentication Error:', err);
+      // If backend is offline or returned an error, show clear message
+      const isNetworkError = err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('connection'));
+      if (isNetworkError) {
+        setApiError('Unable to connect to backend server. Make sure ASP.NET Core backend is running.');
+      } else {
+        setApiError(err.message || 'Authentication failed. Please verify credentials.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleOfflineDemoLogin = (roleType) => {
+    const demos = {
+      Admin: {
+        userId: 1,
+        name: 'Aarav Patel (Admin Demo)',
+        email: 'admin@spms.com',
+        role: 'Admin',
+        roles: ['Admin'],
+        mobileNumber: '9876543210',
+      },
+      Faculty: {
+        userId: 2,
+        name: 'Prof. Priya Sharma (Faculty Demo)',
+        email: 'faculty@spms.com',
+        role: 'Faculty',
+        roles: ['Faculty'],
+        mobileNumber: '9876543211',
+      },
+      Student: {
+        userId: 3,
+        name: 'Rohan Mehta (Student Demo)',
+        email: 'student@spms.com',
+        role: 'Student',
+        roles: ['Student'],
+        mobileNumber: '9876543212',
+      },
+    };
+    onLogin(demos[roleType] || demos.Admin);
+  };
+
   const setDemoCredentials = (type) => {
     const credentials = {
-      admin: { email: 'admin@spms.com', password: 'Admin@123' },
-      faculty: { email: 'faculty@spms.com', password: 'Faculty@123' },
-      student: { email: 'student@spms.com', password: 'Student@123' }
+      admin: { email: 'admin@spms.com', password: 'Admin@123', role: 'Admin' },
+      faculty: { email: 'faculty@spms.com', password: 'Faculty@123', role: 'Faculty' },
+      student: { email: 'student@spms.com', password: 'Student@123', role: 'Student' },
     };
     const cred = credentials[type] || credentials.admin;
-    setFormData(prev => ({ ...prev, email: cred.email, password: cred.password }));
+    setFormData((prev) => ({
+      ...prev,
+      email: cred.email,
+      password: cred.password,
+      role: cred.role,
+    }));
     setErrors({});
+    setApiError('');
   };
 
   return (
     <div className="login-bg">
       <div className="login-card">
         <div className="login-header">
-          <div style={{ fontSize: '40px', marginBottom: '8px' }}>🎓</div>
+          <div style={{ fontSize: '42px', marginBottom: '8px' }}>🎓</div>
           <h2>SPMS Portal</h2>
-          <p>{isSignUp ? 'Create a new account' : 'Student Project Management System'}</p>
+          <p>{isSignUp ? 'Create your SPMS Account' : 'Student Project Management System'}</p>
         </div>
+
+        {apiError && (
+          <div className="alert alert-error" style={{ fontSize: '13px', marginBottom: '16px' }}>
+            <span>⚠️</span>
+            <div style={{ flex: 1 }}>{apiError}</div>
+          </div>
+        )}
+
+        {apiSuccess && (
+          <div className="alert alert-success" style={{ fontSize: '13px', marginBottom: '16px' }}>
+            <span>✅</span>
+            <div style={{ flex: 1 }}>{apiSuccess}</div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }} noValidate>
           {isSignUp && (
@@ -153,7 +252,7 @@ export default function Login({ onLogin }) {
                   name="fullName"
                   value={formData.fullName}
                   onChange={handleInputChange}
-                  placeholder="John Doe"
+                  placeholder="e.g. Aarav Patel"
                   required
                 />
                 {errors.fullName && <span className="error-message">❌ {errors.fullName}</span>}
@@ -167,7 +266,7 @@ export default function Login({ onLogin }) {
                   name="mobileNumber"
                   value={formData.mobileNumber}
                   onChange={handleInputChange}
-                  placeholder="+91-9876543210"
+                  placeholder="e.g. 9876543210"
                   required
                 />
                 {errors.mobileNumber && <span className="error-message">❌ {errors.mobileNumber}</span>}
@@ -198,7 +297,7 @@ export default function Login({ onLogin }) {
               name="email"
               value={formData.email}
               onChange={handleInputChange}
-              placeholder="name@spms.com"
+              placeholder="e.g. admin@spms.com"
               required
             />
             {errors.email && <span className="error-message">❌ {errors.email}</span>}
@@ -218,7 +317,7 @@ export default function Login({ onLogin }) {
             {errors.password && <span className="error-message">❌ {errors.password}</span>}
             {isSignUp && (
               <small style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                💡 Must contain: Uppercase, lowercase, digit, special char (@$!%*?&)
+                💡 8+ characters, uppercase, lowercase, digit, and special char (@$!%*?&)
               </small>
             )}
           </div>
@@ -245,7 +344,7 @@ export default function Login({ onLogin }) {
             type="submit"
             disabled={loading}
           >
-            {loading ? '⏳ Processing...' : isSignUp ? 'Create Account' : 'Sign In'}
+            {loading ? '⏳ Authenticating...' : isSignUp ? 'Create SPMS Account' : 'Sign In with Backend API'}
           </button>
         </form>
 
@@ -257,34 +356,35 @@ export default function Login({ onLogin }) {
             onClick={() => {
               setIsSignUp(!isSignUp);
               setErrors({});
+              setApiError('');
+              setApiSuccess('');
               if (!isSignUp) {
-                setFormData(prev => ({
+                setFormData((prev) => ({
                   ...prev,
                   fullName: '',
                   mobileNumber: '',
                   confirmPassword: '',
-                  email: '',
-                  password: ''
+                  role: 'Student',
                 }));
               } else {
-                setFormData(prev => ({
+                setFormData((prev) => ({
                   ...prev,
                   email: 'admin@spms.com',
-                  password: 'admin123'
+                  password: 'Admin@123',
                 }));
               }
             }}
           >
-            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+            {isSignUp ? 'Already registered? Sign In' : "Don't have an account? Sign Up"}
           </button>
         </div>
 
         {!isSignUp && (
           <div style={{ marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-            <div style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px', fontWeight: '700', letterSpacing: '0.05em' }}>
-              DEMO SIGN IN CREDENTIALS
+            <div style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px', fontWeight: '700', letterSpacing: '0.05em' }}>
+              FILL DEMO CREDENTIALS
             </div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '14px' }}>
               <button
                 className={`btn btn-sm ${formData.email === 'admin@spms.com' ? '' : 'btn-outline'}`}
                 onClick={() => setDemoCredentials('admin')}
@@ -307,6 +407,40 @@ export default function Login({ onLogin }) {
                 Student
               </button>
             </div>
+
+            {apiError && (
+              <div style={{ textAlign: 'center', paddingTop: '6px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
+                  Backend offline? Launch in Offline Preview mode:
+                </span>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    onClick={() => handleOfflineDemoLogin('Admin')}
+                    type="button"
+                    style={{ fontSize: '11px' }}
+                  >
+                    Enter as Admin
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    onClick={() => handleOfflineDemoLogin('Faculty')}
+                    type="button"
+                    style={{ fontSize: '11px' }}
+                  >
+                    Enter as Faculty
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    onClick={() => handleOfflineDemoLogin('Student')}
+                    type="button"
+                    style={{ fontSize: '11px' }}
+                  >
+                    Enter as Student
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
